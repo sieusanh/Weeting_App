@@ -1,1 +1,2 @@
-# Weeting_App
+# Weeting
+Chat and video call
