@@ -28,16 +28,17 @@ function Chat() {
     const [socket, setSocket] = useState(null)
     let newSocket
     useEffect(() => {
-        newSocket = io('http://localhost:8080')
+        // newSocket = io('http://localhost:8080')
         // newSocket = io('http://localhost:8080', {
-        //     transport : ['websocket'] 
+        //     transports : ['websocket'] 
         // })
-        // newSocket = io("http://localhost:8080", {
-        //     withCredentials: true,
-        //     // extraHeaders: {
-        //     //     "my-custom-header": "abcd"
-        //     // }
-        // })
+        newSocket = io('http://localhost:8080', {  
+            cors: {
+                origin: "*",
+                credentials: true
+            },
+            transports : ['websocket'] 
+        })
         setSocket(newSocket)
         newSocket.emit(
             'Client-send-username', 
@@ -56,6 +57,15 @@ function Chat() {
         // socket.on('Server-send-broadcast', data => {
         //     setMessage(data)
         // })    
+        socket.on("connect", () => {
+            const transport = socket.io.engine.transport.name; // in most cases, "polling"
+            console.log('Transport name: ', transport)
+            
+            socket.io.engine.on("upgrade", () => {
+                const upgradedTransport = socket.io.engine.transport.name; // in most cases, "websocket"
+                console.log('Upgraded transport name: ', upgradedTransport)
+            })
+        })
         socket.on('Fail-connect-Username-in-use', () => {
             setAlert('Username hiện đang sử dụng')
         })
@@ -85,44 +95,63 @@ function Chat() {
     function sendMessage(e) {
         e.preventDefault()
         let chatId
+        let accepted = true
         if (searchChat) { 
             // Kiểm tra xem trước đó đã connect chưa
             axios.post('/peer/check-chat-exist', {
                 userId1: localStorage.getItem('userId'), 
                 userId2
             })
-            .then(async res => {
+            .then(res => {
                 if (res.data.message === 'Chat not found') {
                     setConnectAccepted(false)
-                    function myPromise(callback) {
-                        return new Promise((resolve, reject) => {
-                            callback()
-                            resolve('yes')
-                            reject('no')
-                        })
-                    }
-                    await myPromise(() => socket.emit('Invite-connect', chatName))
+                    accepted = false
+                    // function myPromise(callback) {
+                    //     return new Promise((resolve, reject) => {
+                    //         callback()
+                    //         resolve('yes')
+                    //         reject('no')
+                    //     })
+                    // }
+                    // await myPromise(() => socket.emit('Invite-connect', chatName))
+                    socket.emit('Invite-connect', chatName)
                     socket.on('Decline-connect', data => {
                         if (data === chatName) 
                             setConnectAccepted(false)
                     })
-                    await myPromise(() => 
-                        socket.on('Accept-connect', data => {
-                            if (data === chatName) {
-                                setConnectAccepted(true)
-                                axios.post('/peer/create-new-peer-chat', {
-                                    userId1: localStorage.getItem('userId'), 
-                                    userId2
-                                })
-                                .then(res => {
-                                    if (res.status === 200){
-                                        dispatch(actions.setPeerChatId(res.data.peerChatId))
-                                        chatId = res.data.peerChatId
-                                    }
-                                })
-                            }
-                        })
-                    )
+                    // await myPromise(() => 
+                    //     socket.on('Accept-connect', data => {
+                    //         if (data === chatName) {
+                    //             setConnectAccepted(true)
+                    //             axios.post('/peer/create-new-peer-chat', {
+                    //                 userId1: localStorage.getItem('userId'), 
+                    //                 userId2
+                    //             })
+                    //             .then(res => {
+                    //                 if (res.status === 200){
+                    //                     dispatch(actions.setPeerChatId(res.data.peerChatId))
+                    //                     chatId = res.data.peerChatId
+                    //                 }
+                    //             })
+                    //         }
+                    //     })
+                    // )
+                    socket.on('Accept-connect', data => {
+                        if (data === chatName) {
+                            setConnectAccepted(true)
+                            axios.post('/peer/create-new-peer-chat', {
+                                userId1: localStorage.getItem('userId'), 
+                                userId2
+                            })
+                            .then(res => {
+                                if (res.status === 200){
+                                    dispatch(actions.setPeerChatId(res.data.peerChatId))
+                                    chatId = res.data.peerChatId
+                                    accepted = true
+                                }
+                            })
+                        }
+                    })
                     console.log('End of Chat not found')
                 }
                 else {
@@ -132,21 +161,24 @@ function Chat() {
             })
             .catch(err => console.log(err.response.data))
         }
-        socket.emit('Peer-message', {
-            toUsername: chatName,
-            message: inputParagraph
-        })
-        axios.patch('/peer/push-message', {
-            peerChatId: chatId,
-            userId: localStorage.getItem('userId'),
-            paragraph: inputParagraph
-        })
-        .then(res => {
-            if (res.status === 200) 
-                setMessage(inputParagraph)
-        })
-        .catch(err => console.log('Loi gi: ', err.response.data))
-        console.log('End all')
+        console.log('accepted: ', accepted)
+        if (accepted) {
+            socket.emit('Peer-message', {
+                toUsername: chatName,
+                message: inputParagraph
+            })
+            axios.patch('/peer/push-message', {
+                peerChatId: chatId,
+                userId: localStorage.getItem('userId'),
+                paragraph: inputParagraph
+            })
+            .then(res => {
+                if (res.status === 200) 
+                    setMessage(inputParagraph)
+            })
+            .catch(err => console.log('Loi gi: ', err.response.data))
+            console.log('End all')
+        }
     }
 
     return (

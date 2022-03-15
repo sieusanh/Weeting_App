@@ -44,18 +44,16 @@ function UserBoard() {
         setTab('Search')
         axios.get('/user/find/username/' + e.target.value)
         .then(res => {
-            if (res.status === 200) {
+            if (res.data.message && res.data.message === '404')
+                setResult('404')
+            else {
                 setResult('Found')
                 setChatName(e.target.value)
                 setChatAvatar(res.data.avatar)
                 setUserId2(res.data.id)
             }
         })
-        .catch(err => {
-            if (err.response.status === 404)
-                setResult('404')
-            console.log(err.response.data)
-        })
+        .catch(err => console.log(err.response.data))
     }
     
     function renderSearchChat(e) {
